@@ -1,7 +1,12 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
+/**
+ * User Schema
+ * Defines the structure for user documents in MongoDB
+ */
 const UserSchema = new mongoose.Schema({
   name: {
     type: String,
@@ -29,6 +34,18 @@ const UserSchema = new mongoose.Schema({
     enum: ['user', 'admin'],
     default: 'user'
   },
+  bio: {
+    type: String,
+    maxlength: [500, 'Bio cannot be more than 500 characters']
+  },
+  avatar: {
+    type: String,
+    default: 'default-avatar.jpg'
+  },
+  favorites: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Recipe'
+  }],
   createdAt: {
     type: Date,
     default: Date.now
@@ -58,5 +75,30 @@ UserSchema.methods.getSignedJwtToken = function() {
 UserSchema.methods.matchPassword = async function(enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
+
+// Generate and hash password reset token
+UserSchema.methods.getResetPasswordToken = function() {
+  // Generate token
+  const resetToken = crypto.randomBytes(20).toString('hex');
+
+  // Hash token and set to resetPasswordToken field
+  this.resetPasswordToken = crypto
+    .createHash('sha256')
+    .update(resetToken)
+    .digest('hex');
+
+  // Set expire time (10 minutes)
+  this.resetPasswordExpire = Date.now() + 10 * 60 * 1000;
+
+  return resetToken;
+};
+
+// Create a virtual for user's full name
+UserSchema.virtual('fullName').get(function() {
+  return `${this.name}`;
+});
+
+// Create index for email search
+UserSchema.index({ email: 1 });
 
 module.exports = mongoose.model('User', UserSchema);

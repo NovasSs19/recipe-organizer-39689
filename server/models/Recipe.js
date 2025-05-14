@@ -1,5 +1,9 @@
 const mongoose = require('mongoose');
 
+/**
+ * Recipe Schema
+ * Defines the structure for recipe documents in MongoDB
+ */
 const RecipeSchema = new mongoose.Schema({
   title: {
     type: String,
@@ -10,7 +14,12 @@ const RecipeSchema = new mongoose.Schema({
   category: {
     type: String,
     required: [true, 'Please add a category'],
-    enum: ['breakfast', 'lunch', 'dinner', 'snack', 'dessert']
+    enum: ['breakfast', 'lunch', 'dinner', 'snack', 'dessert', 'appetizer', 'soup', 'salad', 'main', 'side', 'drink']
+  },
+  cuisine: {
+    type: String,
+    required: [true, 'Please specify the cuisine'],
+    enum: ['italian', 'mexican', 'chinese', 'indian', 'french', 'japanese', 'mediterranean', 'american', 'thai', 'turkish', 'other']
   },
   ingredients: {
     type: [String],
@@ -53,6 +62,26 @@ const RecipeSchema = new mongoose.Schema({
 });
 
 // Add index for search functionality
-RecipeSchema.index({ title: 'text', ingredients: 'text' });
+RecipeSchema.index({ title: 'text', ingredients: 'text', cuisine: 'text', category: 'text' });
+
+/**
+ * Virtual for total time
+ * Calculates total cooking time by adding prep and cook time
+ */
+RecipeSchema.virtual('totalTime').get(function() {
+  return this.prepTime + this.cookTime;
+});
+
+/**
+ * Pre-save middleware
+ * Runs before saving the document
+ */
+RecipeSchema.pre('save', function(next) {
+  // Capitalize first letter of title
+  if (this.title) {
+    this.title = this.title.charAt(0).toUpperCase() + this.title.slice(1);
+  }
+  next();
+});
 
 module.exports = mongoose.model('Recipe', RecipeSchema);
