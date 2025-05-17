@@ -3,8 +3,8 @@ const User = require('../models/User');
 const config = require('../config/config');
 
 // Get JWT secret from config
-const JWT_SECRET = process.env.JWT_SECRET || config.security.jwtSecret || 'secret';
-const JWT_EXPIRE = process.env.JWT_EXPIRE || config.security.jwtExpire || '30d';
+const JWT_SECRET = process.env.JWT_SECRET || config.jwt.secret || 'secret';
+const JWT_EXPIRE = process.env.JWT_EXPIRE || config.jwt.expiresIn || '30d';
 
 /**
  * Middleware to protect routes - verifies JWT token and sets user in request
