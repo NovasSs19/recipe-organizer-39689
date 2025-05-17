@@ -1,8 +1,16 @@
 const Recipe = require('../models/Recipe');
+const User = require('../models/User');
+const mongoose = require('mongoose');
+const config = require('../config/config');
 
-// @desc    Get all recipes
-// @route   GET /api/recipes
-// @access  Public
+// Helper function to check if string is valid ObjectId
+const isValidObjectId = (id) => mongoose.Types.ObjectId.isValid(id);
+
+/**
+ * @desc    Get all recipes with advanced filtering, sorting and pagination
+ * @route   GET /api/recipes
+ * @access  Public
+ */
 exports.getRecipes = async (req, res) => {
   try {
     let query;
@@ -83,12 +91,27 @@ exports.getRecipes = async (req, res) => {
   }
 };
 
-// @desc    Get single recipe
-// @route   GET /api/recipes/:id
-// @access  Public
+/**
+ * @desc    Get single recipe with creator details
+ * @route   GET /api/recipes/:id
+ * @access  Public
+ */
 exports.getRecipe = async (req, res) => {
   try {
-    const recipe = await Recipe.findById(req.params.id);
+    // Validate ObjectId before querying database
+    if (!isValidObjectId(req.params.id)) {
+      return res.status(400).json({
+        success: false,
+        message: `Invalid recipe ID format: ${req.params.id}`
+      });
+    }
+
+    // Find recipe and populate creator details
+    const recipe = await Recipe.findById(req.params.id)
+      .populate({
+        path: 'createdBy',
+        select: 'name email avatar'
+      });
     
     if (!recipe) {
       return res.status(404).json({
@@ -96,6 +119,8 @@ exports.getRecipe = async (req, res) => {
         message: `Recipe not found with id of ${req.params.id}`
       });
     }
+    
+    // Track recipe views (could be implemented with a viewCount field)
     
     res.status(200).json({
       success: true,
@@ -110,21 +135,51 @@ exports.getRecipe = async (req, res) => {
   }
 };
 
-// @desc    Create new recipe
-// @route   POST /api/recipes
-// @access  Private
+/**
+ * @desc    Create new recipe with validation
+ * @route   POST /api/recipes
+ * @access  Private
+ */
 exports.createRecipe = async (req, res) => {
   try {
     // Add user to req.body
     req.body.createdBy = req.user.id;
     
+    // Validate required fields
+    const { title, category, ingredients, instructions, prepTime, cookTime, servings } = req.body;
+    
+    if (!title || !category || !ingredients || !instructions || !prepTime || !cookTime || !servings) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide all required fields',
+        requiredFields: ['title', 'category', 'ingredients', 'instructions', 'prepTime', 'cookTime', 'servings']
+      });
+    }
+    
+    // Create recipe
     const recipe = await Recipe.create(req.body);
+    
+    // Update user's recipes count
+    await User.findByIdAndUpdate(req.user.id, {
+      $inc: { recipeCount: 1 }
+    });
     
     res.status(201).json({
       success: true,
+      message: 'Recipe created successfully',
       data: recipe
     });
   } catch (error) {
+    // Handle validation errors
+    if (error.name === 'ValidationError') {
+      const messages = Object.values(error.errors).map(val => val.message);
+      return res.status(400).json({
+        success: false,
+        message: 'Validation Error',
+        errors: messages
+      });
+    }
+    
     res.status(500).json({
       success: false,
       message: 'Server error',
@@ -133,9 +188,11 @@ exports.createRecipe = async (req, res) => {
   }
 };
 
-// @desc    Update recipe
-// @route   PUT /api/recipes/:id
-// @access  Private
+/**
+ * @desc    Update recipe with validation
+ * @route   PUT /api/recipes/:id
+ * @access  Private
+ */
 exports.updateRecipe = async (req, res) => {
   try {
     let recipe = await Recipe.findById(req.params.id);
@@ -173,9 +230,11 @@ exports.updateRecipe = async (req, res) => {
   }
 };
 
-// @desc    Delete recipe
-// @route   DELETE /api/recipes/:id
-// @access  Public (for demo purposes)
+/**
+ * @desc    Delete recipe with cleanup
+ * @route   DELETE /api/recipes/:id
+ * @access  Public (for demo purposes)
+ */
 exports.deleteRecipe = async (req, res) => {
   try {
     // Find recipe by ID and delete it directly
@@ -205,29 +264,81 @@ exports.deleteRecipe = async (req, res) => {
   }
 };
 
-// @desc    Search recipes
-// @route   GET /api/recipes/search
-// @access  Public
+/**
+ * @desc    Search recipes with advanced filtering
+ * @route   GET /api/recipes/search
+ * @access  Public
+ */
 exports.searchRecipes = async (req, res) => {
   try {
-    const { query } = req.query;
+    const { query, category, cuisine, maxTime, difficulty } = req.query;
     
-    if (!query) {
+    if (!query && !category && !cuisine && !maxTime && !difficulty) {
       return res.status(400).json({
         success: false,
-        message: 'Please provide a search query'
+        message: 'Please provide at least one search parameter'
       });
     }
     
-    const recipes = await Recipe.find({
-      $text: {
-        $search: query
+    // Build search criteria
+    const searchCriteria = {};
+    
+    // Text search if query is provided
+    if (query) {
+      searchCriteria.$text = { $search: query };
+    }
+    
+    // Filter by category if provided
+    if (category) {
+      searchCriteria.category = category;
+    }
+    
+    // Filter by cuisine if provided
+    if (cuisine) {
+      searchCriteria.cuisine = cuisine;
+    }
+    
+    // Filter by total cooking time if provided
+    if (maxTime) {
+      const maxTimeInt = parseInt(maxTime);
+      if (!isNaN(maxTimeInt)) {
+        searchCriteria.$expr = { $lte: [{ $add: ['$prepTime', '$cookTime'] }, maxTimeInt] };
       }
-    });
+    }
+    
+    // Filter by difficulty if provided
+    if (difficulty) {
+      searchCriteria.difficulty = difficulty;
+    }
+    
+    // Execute search with pagination
+    const page = parseInt(req.query.page, 10) || 1;
+    const limit = parseInt(req.query.limit, 10) || 10;
+    const startIndex = (page - 1) * limit;
+    
+    const recipes = await Recipe.find(searchCriteria)
+      .select('title category cuisine prepTime cookTime difficulty imageUrl createdAt')
+      .sort('-createdAt')
+      .skip(startIndex)
+      .limit(limit);
+    
+    // Get total count for pagination
+    const total = await Recipe.countDocuments(searchCriteria);
+    
+    // Build pagination object
+    const pagination = {};
+    if (startIndex + limit < total) {
+      pagination.next = { page: page + 1, limit };
+    }
+    if (startIndex > 0) {
+      pagination.prev = { page: page - 1, limit };
+    }
     
     res.status(200).json({
       success: true,
       count: recipes.length,
+      total,
+      pagination,
       data: recipes
     });
   } catch (error) {
