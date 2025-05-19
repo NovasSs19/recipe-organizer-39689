@@ -16,4 +16,4 @@ const rateLimiter = rateLimit({
   }
 });
 
-module.exports = rateLimiter;
+module.exports = { rateLimiter };

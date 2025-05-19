@@ -7,7 +7,7 @@
 const config = {
   // Server configuration
   server: {
-    port: process.env.PORT || 5000,
+    port: process.env.PORT || 5050,
     env: process.env.NODE_ENV || 'development',
     apiUrl: process.env.API_URL || 'http://localhost:5000',
     clientUrl: process.env.CLIENT_URL || 'http://localhost:3000'

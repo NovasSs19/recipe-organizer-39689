@@ -12,6 +12,9 @@ const allowedOrigins = [
 
 // CORS options configuration
 const corsOptions = {
+  origin: '*', // Allow all origins for development
+  /*
+  // For production, use this more restrictive approach
   origin: function (origin, callback) {
     // Allow requests with no origin (like mobile apps, curl requests)
     if (!origin) return callback(null, true);
@@ -24,6 +27,7 @@ const corsOptions = {
       callback(new Error('Not allowed by CORS'));
     }
   },
+  */
   credentials: true, // Allow cookies and authentication headers
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

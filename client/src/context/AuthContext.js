@@ -9,12 +9,13 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
-  // Set axios default headers
+  // Token değiştiğinde localStorage'ı güncelle
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      localStorage.setItem('token', token);
+      // Not: axios headers artık axiosConfig.js'de yönetiliyor
     } else {
-      delete axios.defaults.headers.common['Authorization'];
+      localStorage.removeItem('token');
     }
   }, [token]);
 

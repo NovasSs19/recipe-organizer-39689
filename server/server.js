@@ -8,10 +8,11 @@ const rateLimit = require('express-rate-limit');
 
 // Import configuration
 const config = require('./config/config');
-const security = require('./config/security');
 const environments = require('./config/environments');
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
+const corsOptions = require('./middleware/corsOptions');
+const { rateLimiter } = require('./middleware/rateLimiter');
 
 // Import routes (to be created later)
 const recipeRoutes = require('./routes/recipes');
@@ -22,13 +23,12 @@ const app = express();
 const PORT = config.server.port;
 
 // Security and optimization middleware
-app.use(helmet(security.helmet)); // Set security HTTP headers
-app.use(cors(security.cors)); // Enable CORS with custom options
+app.use(helmet()); // Set security HTTP headers
+app.use(cors(corsOptions)); // Enable CORS with custom options
 app.use(compression()); // Compress response bodies
 
 // Rate limiting middleware
-const apiLimiter = rateLimit(security.rateLimit);
-app.use('/api/', apiLimiter); // Apply rate limiting to API routes
+app.use('/api/', rateLimiter); // Apply rate limiting to API routes
 
 // Request parsing middleware
 app.use(express.json({ limit: config.upload.maxSize })); // Parse JSON request bodies

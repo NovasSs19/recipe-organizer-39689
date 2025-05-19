@@ -13,7 +13,11 @@ export const RecipeProvider = ({ children }) => {
   // Get all recipes
   const getRecipes = async (filters = {}) => {
     setLoading(true);
+    setError(null); // Clear previous errors
+    
     try {
+      console.log('Fetching recipes with filters:', filters);
+      
       let queryString = '';
       
       // Build query string from filters
@@ -21,12 +25,34 @@ export const RecipeProvider = ({ children }) => {
         queryString = '?' + new URLSearchParams(filters).toString();
       }
       
-      const res = await axios.get(`/api/recipes${queryString}`);
-      setRecipes(res.data.data);
-      return res.data;
+      // Add token to headers
+      const token = localStorage.getItem('token');
+      const config = {
+        headers: {
+          Authorization: token ? `Bearer ${token}` : ''
+        }
+      };
+      
+      console.log('Making API request to:', `/api/recipes${queryString}`);
+      const res = await axios.get(`/api/recipes${queryString}`, config);
+      
+      console.log('Recipe API response:', res.data);
+      
+      if (res.data && res.data.data) {
+        setRecipes(res.data.data);
+        return res.data;
+      } else {
+        throw new Error('Invalid response format from API');
+      }
     } catch (error) {
-      setError(error.response?.data?.message || 'Error fetching recipes');
-      toast.error('Error fetching recipes');
+      console.error('Error fetching recipes:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      
+      const errorMessage = error.response?.data?.message || 'Error fetching recipes';
+      setError(errorMessage);
+      toast.error(errorMessage);
+      
+      return { success: false, error: errorMessage };
     } finally {
       setLoading(false);
     }
@@ -49,17 +75,60 @@ export const RecipeProvider = ({ children }) => {
 
   // Create new recipe
   const createRecipe = async (recipeData) => {
+    console.log('Creating recipe with data:', recipeData); // Debug info
+    
+    // Set loading state and clear previous errors
     setLoading(true);
+    setError(null);
+    
     try {
+      // Data validation - ensure all required fields are filled
+      const requiredFields = ['title', 'category', 'ingredients', 'instructions', 'prepTime', 'cookTime', 'servings'];
+      const missingFields = requiredFields.filter(field => {
+        if (field === 'ingredients') {
+          return !recipeData.ingredients || recipeData.ingredients.length === 0 || 
+                 (recipeData.ingredients.length === 1 && recipeData.ingredients[0].trim() === '');
+        }
+        return !recipeData[field] || recipeData[field].toString().trim() === '';
+      });
+      
+      if (missingFields.length > 0) {
+        console.error('Missing required fields:', missingFields);
+        const errorMsg = `Missing fields: ${missingFields.join(', ')}`;
+        setError(errorMsg);
+        toast.error(errorMsg);
+        setLoading(false);
+        return null;
+      }
+      
+      // Send API request - axiosConfig.js will automatically add the token
+      console.log('Sending API request to create recipe...');
       const res = await axios.post('/api/recipes', recipeData);
-      setRecipes([...recipes, res.data.data]);
-      toast.success('Recipe created successfully');
-      return res.data.data;
+      console.log('API response:', res.data);
+      
+      // Update recipes state if successful
+      if (res.data && res.data.data) {
+        console.log('Recipe created successfully:', res.data.data);
+        setRecipes(prevRecipes => [...prevRecipes, res.data.data]);
+        toast.success('Recipe created successfully!');
+        return res.data.data;
+      } else {
+        throw new Error('Invalid response format from API');
+      }
     } catch (error) {
-      setError(error.response?.data?.message || 'Error creating recipe');
-      toast.error('Error creating recipe');
+      console.error('Create recipe error:', error);
+      console.error('Error details:', error.response?.data || error.message);
+      
+      // Set error message
+      const errorMessage = error.response?.data?.message ||
+        error.message ||
+        'Error creating recipe';
+      
+      setError(errorMessage);
+      toast.error(errorMessage);
       return null;
     } finally {
+      console.log('Setting loading state to false');
       setLoading(false);
     }
   };
@@ -132,6 +201,21 @@ export const RecipeProvider = ({ children }) => {
   const clearRecipe = () => {
     setRecipe(null);
   };
+
+  // Automatically load recipes when page loads
+  useEffect(() => {
+    const loadInitialRecipes = async () => {
+      try {
+        console.log('Loading initial recipes on page load...');
+        await getRecipes();
+      } catch (err) {
+        console.error('Failed to load initial recipes:', err);
+      }
+    };
+    
+    loadInitialRecipes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <RecipeContext.Provider

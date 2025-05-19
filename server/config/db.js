@@ -11,10 +11,9 @@ const connectDB = async () => {
     // Get database URI and options from config
     const { uri, options } = config.db;
     
-    // Add environment-specific database settings
+    // Use standard MongoDB connection options
     const dbOptions = {
-      ...options,
-      logging: environments.db.logging
+      ...options
     };
     
     // Connect to MongoDB
